@@ -47,6 +47,7 @@ def run_case(df: pd.DataFrame, case: dict, threshold: float = 2.5) -> dict:
         "lead_time_days": None,
         "false_positive_rate": None,
         "breach_level": None,
+        "flagged_rows": [],
     }
 
     d = find_designation_row(df, case["designation_date"])
@@ -85,6 +86,7 @@ def run_case(df: pd.DataFrame, case: dict, threshold: float = 2.5) -> dict:
     obs_scores = score.loc[obs_start:obs_end]
     breaches = obs_scores[obs_scores > breach_level]
 
+    result["flagged_rows"] = list(breaches.index)
     if len(breaches) > 0:
         first_breach_row = breaches.index[0]
         result["lead_time_days"] = d - first_breach_row

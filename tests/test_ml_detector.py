@@ -62,6 +62,10 @@ def test_run_case_ml_flags_the_known_spike():
     expected_lead_time = designation_row - spike_row
     assert result["lead_time_days"] is not None
     assert abs(result["lead_time_days"] - expected_lead_time) <= 8
+    # exposed so an ensemble stage can combine this stage's flags with
+    # another stage's without recomputing the detection logic
+    assert result["flagged_rows"]
+    assert result["lead_time_days"] == designation_row - result["flagged_rows"][0]
 
 
 def test_run_case_ml_insufficient_data_when_baseline_too_short():

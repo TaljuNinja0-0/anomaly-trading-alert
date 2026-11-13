@@ -12,6 +12,7 @@ from src.detector import volume_zscore, price_return_zscore, composite_score
 from src.backtest import run_case
 from src.ml_detector import run_case_ml
 from src.dl_detector import run_case_dl
+from src.ensemble_detector import run_case_ensemble
 from src.report import plot_case, write_results_csv
 
 OUTPUT_DIR = "output"
@@ -27,6 +28,7 @@ def main():
     results = []
     results_ml = []
     results_dl = []
+    results_ensemble = []
     for i, case in enumerate(CASES):
         if i > 0:
             time.sleep(1)  # be polite to the quote endpoint between calls
@@ -51,6 +53,9 @@ def main():
         result_dl = run_case_dl(df, case)
         results_dl.append(result_dl)
 
+        result_ensemble = run_case_ensemble(df, case)
+        results_ensemble.append(result_ensemble)
+
         if result["status"] == "ok":
             plot_case(df, score, case, OUTPUT_DIR, breach_level=result["breach_level"])
 
@@ -58,6 +63,7 @@ def main():
     write_results_csv(results, os.path.join(OUTPUT_DIR, "results.csv"))
     write_results_csv(results_ml, os.path.join(OUTPUT_DIR, "results_ml.csv"))
     write_results_csv(results_dl, os.path.join(OUTPUT_DIR, "results_dl.csv"))
+    write_results_csv(results_ensemble, os.path.join(OUTPUT_DIR, "results_ensemble.csv"))
 
     print("=== 통계룰 (results.csv) ===")
     for r in results:
@@ -67,6 +73,9 @@ def main():
         print(r)
     print("=== DL / LSTM Autoencoder (results_dl.csv) ===")
     for r in results_dl:
+        print(r)
+    print("=== 앙상블 (통계룰 ∪ ML, results_ensemble.csv) ===")
+    for r in results_ensemble:
         print(r)
 
 

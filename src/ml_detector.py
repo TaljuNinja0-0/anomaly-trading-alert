@@ -59,6 +59,7 @@ def run_case_ml(df: pd.DataFrame, case: dict, contamination=0.05, random_state: 
         "status": "ok",
         "lead_time_days": None,
         "false_positive_rate": None,
+        "flagged_rows": [],
     }
 
     d = find_designation_row(df, case["designation_date"])
@@ -86,6 +87,7 @@ def run_case_ml(df: pd.DataFrame, case: dict, contamination=0.05, random_state: 
 
     predictions = model.predict(obs_features)  # -1 = outlier, 1 = normal
     flagged = obs_features.index[predictions == -1]
+    result["flagged_rows"] = list(flagged)
 
     if len(flagged) > 0:
         result["lead_time_days"] = d - flagged[0]

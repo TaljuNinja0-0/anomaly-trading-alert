@@ -63,6 +63,9 @@ def test_run_case_lead_time_matches_known_spike_position():
     assert result["lead_time_days"] == designation_row - spike_row
     assert result["effective_date"] == case["designation_date"]
     assert result["breach_level"] is not None
+    # exposed so an ensemble stage can combine this stage's flags with
+    # another stage's without recomputing the detection logic
+    assert result["flagged_rows"] == [spike_row]
 
 
 def test_run_case_insufficient_data_when_baseline_too_short():
