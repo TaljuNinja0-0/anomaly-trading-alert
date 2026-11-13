@@ -52,3 +52,20 @@ python run_universe_scan.py   # 기본 limit=200, universe_scan.db에 결과 저
 크론: 매일 17:00 KST(평일), `0 17 * * 1-5 cd /home/user/anomaly-trading-alert && ... run_universe_scan.py`.
 `universe_scan.db`/`universe_scan.log`은 매일 갱신되는 운영 상태라 git
 추적 대상이 아니다(`.gitignore`).
+
+### 상태 확인
+
+이메일/슬랙 같은 알림 채널이 없어서, 실패를 "알려주는" 대신 (1) 네트워크
+오류는 자동 재시도로 흡수하고 (2) KIS 응답이 이상하면 그날 데이터를
+덮어쓰지 않고 실패로 명확히 기록하는 쪽으로 처리한다. 가끔 아래 한
+줄로 확인하면 된다:
+
+```bash
+python run_universe_scan.py --healthcheck
+# 상태: 정상 (마지막 성공 2026-11-13, 200/200 처리, 이상치 14건)
+# 상태: 경고 -- OK 비율이 낮음 (0/200, 2026-11-14) -- 휴장일이 아니라면 KIS 쪽 데이터 지연/형식 변경 의심
+# 상태: 실패 (마지막 시도 2026-11-16, 사유: 유니버스 크기가 비정상적으로 작음 (3 < 150))
+```
+
+정상이면 exit code 0, 그 외엔 1 — cron이나 스크립트에서 바로 체크하기
+쉽게 해뒀다.
