@@ -28,8 +28,12 @@ def main():
             time.sleep(1)  # be polite to the quote endpoint between calls
 
         designation = pd.Timestamp(case["designation_date"])
-        start_date = (designation - pd.Timedelta(days=100)).strftime("%Y%m%d")
-        end_date = (designation + pd.Timedelta(days=15)).strftime("%Y%m%d")
+        # Baseline needs 60 trading rows plus ~20 for the detector's own
+        # rolling-window warm-up before the designation row; ~135 calendar
+        # days covers that with margin while staying under the KIS
+        # 100-row-per-call cap (see Global Constraints in the plan).
+        start_date = (designation - pd.Timedelta(days=135)).strftime("%Y%m%d")
+        end_date = (designation + pd.Timedelta(days=10)).strftime("%Y%m%d")
 
         df = get_daily_price(access_token, app_key, app_secret, case["ticker"], start_date, end_date)
 
@@ -38,7 +42,7 @@ def main():
         results.append(result)
 
         if result["status"] == "ok":
-            plot_case(df, score, case, OUTPUT_DIR)
+            plot_case(df, score, case, OUTPUT_DIR, breach_level=result["breach_level"])
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     write_results_csv(results, os.path.join(OUTPUT_DIR, "results.csv"))

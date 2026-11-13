@@ -13,7 +13,7 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 from src.backtest import find_designation_row
 
 
-def plot_case(df: pd.DataFrame, score: pd.Series, case: dict, output_dir: str) -> str:
+def plot_case(df: pd.DataFrame, score: pd.Series, case: dict, output_dir: str, breach_level: float = None) -> str:
     d = find_designation_row(df, case["designation_date"])
 
     os.makedirs(output_dir, exist_ok=True)
@@ -25,7 +25,9 @@ def plot_case(df: pd.DataFrame, score: pd.Series, case: dict, output_dir: str) -
     ax_price.axvline(d, color="red", linestyle="--")
 
     ax_score.plot(score.index, score, color="tab:orange")
-    ax_score.axhline(2.5, color="gray", linestyle=":")
+    if breach_level is not None:
+        ax_score.axhline(breach_level, color="gray", linestyle=":", label="탐지 임계값(베이스라인 기준)")
+        ax_score.legend(loc="upper left", fontsize=8)
     ax_score.axvline(d, color="red", linestyle="--")
     ax_score.set_ylabel("복합 이상 점수")
     ax_score.set_xlabel("거래일 인덱스")
@@ -38,5 +40,8 @@ def plot_case(df: pd.DataFrame, score: pd.Series, case: dict, output_dir: str) -
 
 
 def write_results_csv(results: list, output_path: str) -> None:
-    columns = ["name", "ticker", "designation_date", "status", "lead_time_days", "false_positive_rate"]
+    columns = [
+        "name", "ticker", "designation_date", "effective_date", "status",
+        "lead_time_days", "false_positive_rate", "breach_level",
+    ]
     pd.DataFrame(results, columns=columns).to_csv(output_path, index=False)

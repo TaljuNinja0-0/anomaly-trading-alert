@@ -5,8 +5,9 @@ import pandas as pd
 
 
 def _rolling_zscore(series: pd.Series, window: int) -> pd.Series:
-    mean = series.rolling(window).mean()
-    std = series.rolling(window).std().replace(0, np.nan)
+    baseline = series.shift(1)  # compare today against the trailing window, excluding today
+    mean = baseline.rolling(window).mean()
+    std = baseline.rolling(window).std().replace(0, np.nan)
     return (series - mean) / std
 
 
