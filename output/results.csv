@@ -1,0 +1,5 @@
+name,ticker,designation_date,status,lead_time_days,false_positive_rate
+SK하이닉스,000660,2025-12-11,ok,,0.0
+SK스퀘어,402340,2025-12-11,ok,,0.0
+현대로템,064350,2025-12-10,ok,2.0,0.027777777777777776
+두산에너빌리티,034020,2025-12-08,ok,,0.0
