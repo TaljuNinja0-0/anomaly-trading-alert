@@ -4,3 +4,4 @@ numpy
 matplotlib
 python-dotenv
 pytest
+scikit-learn

@@ -10,6 +10,7 @@ from src.kis_client import get_access_token, get_daily_price
 from src.cases import CASES
 from src.detector import volume_zscore, price_return_zscore, composite_score
 from src.backtest import run_case
+from src.ml_detector import run_case_ml
 from src.report import plot_case, write_results_csv
 
 OUTPUT_DIR = "output"
@@ -23,16 +24,17 @@ def main():
     access_token = get_access_token(app_key, app_secret)
 
     results = []
+    results_ml = []
     for i, case in enumerate(CASES):
         if i > 0:
             time.sleep(1)  # be polite to the quote endpoint between calls
 
         designation = pd.Timestamp(case["designation_date"])
-        # Baseline needs 60 trading rows plus ~20 for the detector's own
-        # rolling-window warm-up before the designation row; ~135 calendar
-        # days covers that with margin while staying under the KIS
-        # 100-row-per-call cap (see Global Constraints in the plan).
-        start_date = (designation - pd.Timedelta(days=135)).strftime("%Y%m%d")
+        # The ML stage's baseline (ml_detector.ML_BASELINE_LOOKBACK=100)
+        # needs ~100+31+20(warm-up) ~= 151 trading rows before the
+        # designation row; kis_client.get_daily_price now paginates across
+        # multiple calls, so a wide calendar range is fine here.
+        start_date = (designation - pd.Timedelta(days=250)).strftime("%Y%m%d")
         end_date = (designation + pd.Timedelta(days=10)).strftime("%Y%m%d")
 
         df = get_daily_price(access_token, app_key, app_secret, case["ticker"], start_date, end_date)
@@ -41,13 +43,21 @@ def main():
         result = run_case(df, case)
         results.append(result)
 
+        result_ml = run_case_ml(df, case)
+        results_ml.append(result_ml)
+
         if result["status"] == "ok":
             plot_case(df, score, case, OUTPUT_DIR, breach_level=result["breach_level"])
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     write_results_csv(results, os.path.join(OUTPUT_DIR, "results.csv"))
+    write_results_csv(results_ml, os.path.join(OUTPUT_DIR, "results_ml.csv"))
 
+    print("=== 통계룰 (results.csv) ===")
     for r in results:
+        print(r)
+    print("=== ML / IsolationForest (results_ml.csv) ===")
+    for r in results_ml:
         print(r)
 
 
