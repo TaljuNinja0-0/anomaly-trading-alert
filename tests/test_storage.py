@@ -1,4 +1,9 @@
-from src.storage import init_db, record_run, record_result, get_run, get_results, clear_results, write_run_results
+import sqlite3
+
+from src.storage import (
+    init_db, record_run, record_result, get_run, get_results, clear_results,
+    write_run_results, record_run_failure, get_latest_run,
+)
 
 
 def test_record_and_get_run_round_trips(tmp_path):
@@ -83,3 +88,69 @@ def test_write_run_results_clears_previous_rerun_before_writing(tmp_path):
     ])
     results = get_results(db_path, "2026-11-13")
     assert {r["ticker"] for r in results} == {"005930"}
+
+
+def test_write_run_results_marks_the_run_as_ok(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    write_run_results(db_path, "2026-11-13", "t1", 1, 10.0, [
+        {"ticker": "005930", "name": "삼성전자", "status": "ok", "is_anomaly": False, "anomaly_score": -0.1},
+    ])
+    run = get_run(db_path, "2026-11-13")
+    assert run["run_status"] == "ok"
+    assert run["reason"] is None
+
+
+def test_record_run_failure_marks_the_run_as_failed_without_touching_results(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    # a previous, still-good run for a different date must survive untouched
+    write_run_results(db_path, "2026-11-12", "t0", 1, 10.0, [
+        {"ticker": "005930", "name": "삼성전자", "status": "ok", "is_anomaly": False, "anomaly_score": -0.1},
+    ])
+
+    record_run_failure(db_path, "2026-11-13", "t1", "유니버스 응답이 비정상(size=3)")
+
+    run = get_run(db_path, "2026-11-13")
+    assert run["run_status"] == "failed"
+    assert run["reason"] == "유니버스 응답이 비정상(size=3)"
+    assert get_results(db_path, "2026-11-13") == []
+    assert get_run(db_path, "2026-11-12")["run_status"] == "ok"
+
+
+def test_get_latest_run_returns_the_most_recent_date(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    write_run_results(db_path, "2026-11-10", "t0", 1, 10.0, [])
+    write_run_results(db_path, "2026-11-13", "t1", 1, 10.0, [])
+    record_run_failure(db_path, "2026-11-14", "t2", "실패")
+
+    latest = get_latest_run(db_path)
+    assert latest["run_date"] == "2026-11-14"
+    assert latest["run_status"] == "failed"
+
+
+def test_init_db_migrates_an_existing_db_missing_the_status_columns(tmp_path):
+    # Simulate a db created before run_status/reason existed.
+    db_path = str(tmp_path / "test.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE scan_runs (
+            run_date TEXT PRIMARY KEY, started_at TEXT, universe_size INTEGER,
+            elapsed_seconds REAL, ok_count INTEGER, insufficient_count INTEGER,
+            stale_count INTEGER, error_count INTEGER, anomaly_count INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO scan_runs VALUES ('2026-11-12', 't', 200, 1.0, 200, 0, 0, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    init_db(db_path)  # must not raise, and must add the missing columns
+
+    run = get_run(db_path, "2026-11-12")
+    assert run["run_status"] == "ok"  # pre-existing successful rows default to ok
+    assert run["reason"] is None

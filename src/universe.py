@@ -18,6 +18,8 @@ import zipfile
 
 import requests
 
+from src.retry import with_retry
+
 KOSPI_MST_URL = "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip"
 KOSDAQ_MST_URL = "https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip"
 
@@ -117,11 +119,15 @@ def _parse_master_lines(lines, field_specs, part2_columns, is_common_stock, mark
 
 
 def _download_and_extract_mst(url: str, dest_dir: str) -> str:
-    resp = requests.get(url, timeout=(10, 30))
-    resp.raise_for_status()
+    def _download():
+        resp = requests.get(url, timeout=(10, 30))
+        resp.raise_for_status()
+        return resp.content
+
+    content = with_retry(_download)
     zip_path = os.path.join(dest_dir, os.path.basename(url))
     with open(zip_path, "wb") as f:
-        f.write(resp.content)
+        f.write(content)
     with zipfile.ZipFile(zip_path) as z:
         z.extractall(dest_dir)
     return os.path.join(dest_dir, os.path.basename(url)[: -len(".zip")])

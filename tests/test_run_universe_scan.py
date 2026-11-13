@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from run_universe_scan import run_scan
+import sqlite3
+
+from run_universe_scan import run_scan, _validate_universe, healthcheck
 from src.ml_detector import ML_BASELINE_LOOKBACK
 
 
@@ -63,3 +65,66 @@ def test_run_scan_marks_short_history_as_insufficient_data():
 
     results = run_scan(universe, fetch_price, TODAY, sleep_fn=lambda s: None)
     assert results[0]["status"] == "insufficient_data"
+
+
+def _make_universe(n, include_sentinel=True):
+    universe = [{"ticker": str(i).zfill(6), "name": f"종목{i}"} for i in range(n)]
+    if include_sentinel:
+        universe.append({"ticker": "005930", "name": "삼성전자"})
+    return universe
+
+
+def test_validate_universe_accepts_a_normal_sized_universe():
+    assert _validate_universe(_make_universe(200)) is None
+
+
+def test_validate_universe_rejects_a_universe_that_is_too_small():
+    reason = _validate_universe(_make_universe(10, include_sentinel=False))
+    assert reason is not None
+    assert "10" in reason
+
+
+def test_validate_universe_rejects_a_universe_missing_the_sentinel_ticker():
+    reason = _validate_universe(_make_universe(200, include_sentinel=False))
+    assert reason is not None
+    assert "005930" in reason
+
+
+def test_healthcheck_runs_against_a_pre_migration_db(tmp_path):
+    # A db from before run_status/reason existed -- healthcheck must not
+    # crash just because it's the first thing to touch an old db today.
+    db_path = str(tmp_path / "old.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE scan_runs (
+            run_date TEXT PRIMARY KEY, started_at TEXT, universe_size INTEGER,
+            elapsed_seconds REAL, ok_count INTEGER, insufficient_count INTEGER,
+            stale_count INTEGER, error_count INTEGER, anomaly_count INTEGER
+        )
+        """
+    )
+    today = pd.Timestamp.now().strftime("%Y-%m-%d")
+    conn.execute("INSERT INTO scan_runs VALUES (?, 't', 200, 1.0, 200, 0, 0, 0, 14)", (today,))
+    conn.commit()
+    conn.close()
+
+    exit_code = healthcheck(db_path)
+    assert exit_code == 0
+
+
+def test_healthcheck_warns_when_almost_nothing_processed_ok(tmp_path):
+    # run_status=='ok' (it didn't crash) but nearly every ticker came
+    # back stale/error on a weekday would mean something upstream (KIS
+    # publishing late, a format change not caught by _validate_universe)
+    # is wrong -- "didn't crash" isn't the same as "worked".
+    from src.storage import init_db, write_run_results
+
+    db_path = str(tmp_path / "test.db")
+    init_db(db_path)
+    today = pd.Timestamp.now().strftime("%Y-%m-%d")
+    results = [{"ticker": str(i), "name": "x", "status": "stale", "is_anomaly": None, "anomaly_score": None} for i in range(200)]
+    write_run_results(db_path, today, "t", 200, 10.0, results)
+
+    exit_code = healthcheck(db_path)
+    assert exit_code == 1
