@@ -6,7 +6,6 @@ period and flagging observation-window rows it calls outliers.
 """
 
 import pandas as pd
-from sklearn.ensemble import IsolationForest
 
 from src.backtest import (
     BASELINE_END_OFFSET,
@@ -82,10 +81,13 @@ def run_case_ml(df: pd.DataFrame, case: dict, contamination=0.05, random_state: 
         result["status"] = "insufficient_data"
         return result
 
-    model = IsolationForest(contamination=contamination, random_state=random_state)
-    model.fit(baseline_features)
+    # Local import: src.scan imports build_features/ML_BASELINE_LOOKBACK
+    # from this module, so a top-level import here would be circular.
+    from src.scan import classify_with_isolation_forest
 
-    predictions = model.predict(obs_features)  # -1 = outlier, 1 = normal
+    predictions, _scores = classify_with_isolation_forest(
+        baseline_features, obs_features, contamination, random_state
+    )
     flagged = obs_features.index[predictions == -1]
     result["flagged_rows"] = list(flagged)
 
