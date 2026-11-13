@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from src.kis_client import get_access_token, get_daily_price
 from src.universe import get_market_cap_ranking
 from src.scan import is_data_fresh, scan_today
-from src.storage import init_db, record_run, record_result
+from src.storage import init_db, record_run, record_result, clear_results
 
 
 def main(limit: int = 200, db_path: str = "universe_scan.db") -> None:
@@ -30,6 +30,11 @@ def main(limit: int = 200, db_path: str = "universe_scan.db") -> None:
     run_date = today.strftime("%Y-%m-%d")
     start_date = (today - pd.Timedelta(days=200)).strftime("%Y%m%d")
     end_date = today_yyyymmdd
+
+    # A rerun for the same day (manual retrigger, previous partial run)
+    # must not leave stale per-ticker rows behind for a universe that's
+    # since changed.
+    clear_results(db_path, run_date)
 
     counts = {"ok": 0, "insufficient_data": 0, "stale": 0, "error": 0, "anomaly": 0}
 

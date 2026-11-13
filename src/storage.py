@@ -87,6 +87,11 @@ def record_result(
         )
 
 
+def clear_results(db_path: str, run_date: str) -> None:
+    with _connect(db_path) as conn:
+        conn.execute("DELETE FROM scan_results WHERE run_date = ?", (run_date,))
+
+
 def get_run(db_path: str, run_date: str):
     with _connect(db_path) as conn:
         row = conn.execute(
