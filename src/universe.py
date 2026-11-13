@@ -46,8 +46,18 @@ _KOSPI_PART2_COLUMNS = [
     "영업이익", "경상이익", "당기순이익", "ROE", "기준년월",
     "시가총액", "그룹사코드", "회사신용한도초과", "담보대출가능", "대주가능",
 ]
-_KOSPI_SECURITY_FLAG_COLUMN = "KRX"
 _KOSPI_MARKET_CAP_COLUMN = "시가총액"
+
+
+def _is_kospi_common_stock(values: dict) -> bool:
+    # "KRX" means "member of a KRX sector index", not "is a regular
+    # equity" -- filtering on it silently drops real top-200 companies
+    # that just aren't in an index (confirmed against real downloaded
+    # data: 9/200 true top-200 names excluded, 9 smaller ones took their
+    # place). 그룹코드=="ST" is the actual "this is a stock" flag;
+    # 우선주=="0" excludes preferred shares so one company isn't counted
+    # twice via its common + preferred listings.
+    return values["그룹코드"] == "ST" and values["우선주"] == "0"
 
 _KOSDAQ_FIELD_SPECS = [
     2, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -70,11 +80,14 @@ _KOSDAQ_PART2_COLUMNS = [
     "KRX300 종목 여부 (Y/N)", "매출액", "영업이익", "경상이익", "단기순이익", "ROE(자기자본이익률)",
     "기준년월", "전일기준 시가총액 (억)", "그룹사 코드", "회사신용한도초과여부", "담보대출가능여부", "대주가능여부",
 ]
-_KOSDAQ_SECURITY_FLAG_COLUMN = "KRX 종목 여부"
 _KOSDAQ_MARKET_CAP_COLUMN = "전일기준 시가총액 (억)"
 
 
-def _parse_master_lines(lines, field_specs, part2_columns, security_flag_column, market_cap_column):
+def _is_kosdaq_common_stock(values: dict) -> bool:
+    return values["증권그룹구분코드"] == "ST" and values["우선주 구분 코드"] == "0"
+
+
+def _parse_master_lines(lines, field_specs, part2_columns, is_common_stock, market_cap_column):
     part2_width = sum(field_specs)
     results = []
     for raw in lines:
@@ -92,7 +105,7 @@ def _parse_master_lines(lines, field_specs, part2_columns, security_flag_column,
             values[column] = part2[pos : pos + width]
             pos += width
 
-        if values[security_flag_column] != "Y":
+        if not is_common_stock(values):
             continue
         try:
             market_cap = int(values[market_cap_column])
@@ -104,7 +117,7 @@ def _parse_master_lines(lines, field_specs, part2_columns, security_flag_column,
 
 
 def _download_and_extract_mst(url: str, dest_dir: str) -> str:
-    resp = requests.get(url)
+    resp = requests.get(url, timeout=(10, 30))
     resp.raise_for_status()
     zip_path = os.path.join(dest_dir, os.path.basename(url))
     with open(zip_path, "wb") as f:
@@ -129,14 +142,14 @@ def get_market_cap_ranking(
         with open(kospi_path, encoding="cp949") as f:
             kospi_rows = _parse_master_lines(
                 f.readlines(), _KOSPI_FIELD_SPECS, _KOSPI_PART2_COLUMNS,
-                _KOSPI_SECURITY_FLAG_COLUMN, _KOSPI_MARKET_CAP_COLUMN,
+                _is_kospi_common_stock, _KOSPI_MARKET_CAP_COLUMN,
             )
 
         kosdaq_path = _download_and_extract_mst(KOSDAQ_MST_URL, tmp)
         with open(kosdaq_path, encoding="cp949") as f:
             kosdaq_rows = _parse_master_lines(
                 f.readlines(), _KOSDAQ_FIELD_SPECS, _KOSDAQ_PART2_COLUMNS,
-                _KOSDAQ_SECURITY_FLAG_COLUMN, _KOSDAQ_MARKET_CAP_COLUMN,
+                _is_kosdaq_common_stock, _KOSDAQ_MARKET_CAP_COLUMN,
             )
 
     all_rows = kospi_rows + kosdaq_rows

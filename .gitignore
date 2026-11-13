@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 universe_scan.db
 universe_scan.log
+.universe_scan.lock

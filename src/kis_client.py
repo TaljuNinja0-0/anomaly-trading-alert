@@ -21,6 +21,7 @@ def get_access_token(app_key: str, app_secret: str) -> str:
             "appkey": app_key,
             "appsecret": app_secret,
         },
+        timeout=(10, 30),
     )
     if not resp.ok:
         raise RuntimeError(f"KIS token request failed ({resp.status_code}): {resp.text}")
@@ -65,6 +66,7 @@ def _fetch_daily_price_chunk(
             "FID_PERIOD_DIV_CODE": "D",
             "FID_ORG_ADJ_PRC": "0",
         },
+        timeout=(10, 30),
     )
     if not resp.ok:
         raise RuntimeError(f"KIS daily price request failed ({resp.status_code}): {resp.text}")

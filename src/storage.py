@@ -92,6 +92,51 @@ def clear_results(db_path: str, run_date: str) -> None:
         conn.execute("DELETE FROM scan_results WHERE run_date = ?", (run_date,))
 
 
+def write_run_results(
+    db_path: str,
+    run_date: str,
+    started_at: str,
+    universe_size: int,
+    elapsed_seconds: float,
+    results: list,
+) -> dict:
+    """Clears, writes every per-ticker result, and records the run summary
+    in one transaction -- so a crash mid-write, or two overlapping runs,
+    can't leave scan_runs and scan_results disagreeing (unlike calling
+    clear_results/record_result/record_run separately)."""
+    counts = {"ok": 0, "insufficient_data": 0, "stale": 0, "error": 0}
+    anomaly_count = 0
+
+    with _connect(db_path) as conn:
+        conn.execute("DELETE FROM scan_results WHERE run_date = ?", (run_date,))
+        for r in results:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO scan_results
+                    (run_date, ticker, name, status, is_anomaly, anomaly_score)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (run_date, r["ticker"], r["name"], r["status"],
+                 None if r["is_anomaly"] is None else int(r["is_anomaly"]), r["anomaly_score"]),
+            )
+            counts[r["status"]] = counts.get(r["status"], 0) + 1
+            if r["is_anomaly"]:
+                anomaly_count += 1
+
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO scan_runs
+                (run_date, started_at, universe_size, elapsed_seconds,
+                 ok_count, insufficient_count, stale_count, error_count, anomaly_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (run_date, started_at, universe_size, elapsed_seconds,
+             counts["ok"], counts["insufficient_data"], counts["stale"], counts["error"], anomaly_count),
+        )
+
+    return {**counts, "anomaly": anomaly_count}
+
+
 def get_run(db_path: str, run_date: str):
     with _connect(db_path) as conn:
         row = conn.execute(
